@@ -9,7 +9,7 @@ from flask_cors import CORS  # <-- import CORS
 
 # Flask app
 app = Flask(__name__)
-CORS(app)  # <-- enable CORS for all origins; later restrict to frontend if needed
+CORS(app, origins=["https://zenpdf.vercel.app"], supports_credentials=True)  # <-- enable CORS for all origins; later restrict to frontend if needed
 
 # Health check
 @app.route("/health")
