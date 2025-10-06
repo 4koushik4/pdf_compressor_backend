@@ -3,6 +3,7 @@ import io
 import tempfile
 import shutil
 import subprocess
+import json
 from flask import Flask, request, send_file, jsonify, make_response
 from werkzeug.utils import secure_filename
 from flask_cors import CORS
@@ -128,18 +129,31 @@ def compress_endpoint():
                 compressed_bytes = fh.read()
             compressed_size = len(compressed_bytes)
 
-            # Create response manually and set headers
-            response = make_response(send_file(io.BytesIO(compressed_bytes),
-                                               mimetype="application/pdf",
-                                               download_name=f"compressed_{filename}",
-                                               as_attachment=True))
-            response.headers["X-Original-Size"] = str(orig_bytes)  # Send as bytes
-            response.headers["X-Compressed-Size"] = str(compressed_size)  # Send as bytes
-            response.headers["X-Compression-Ratio"] = f"{(compressed_size / orig_bytes * 100):.1f}%"  # Format as percentage
-            response.headers["X-Quality-Used"] = quality
-            if target_size_mb:
-                response.headers["X-Target-Size"] = str(target_size_mb)
-
+            # Create a combined response with JSON metadata and PDF file
+            response_data = {
+                "metadata": {
+                    "originalSize": orig_bytes,
+                    "compressedSize": compressed_size,
+                    "compressionRatio": f"{(compressed_size / orig_bytes * 100):.1f}%",
+                    "qualityUsed": quality,
+                    "targetSizeUsed": target_size_mb
+                },
+                "filename": f"compressed_{filename}"
+            }
+            
+            # Send both the file and metadata
+            response = make_response(send_file(
+                io.BytesIO(compressed_bytes),
+                mimetype="application/pdf",
+                download_name=f"compressed_{filename}",
+                as_attachment=True
+            ))
+            
+            # Add metadata as a header (base64 encoded to avoid issues)
+            import base64
+            metadata_json = json.dumps(response_data["metadata"])
+            response.headers["X-Compression-Metadata"] = base64.b64encode(metadata_json.encode()).decode()
+            
             return response
 
         # Iterative compression (target size)
@@ -186,15 +200,27 @@ def compress_endpoint():
             compressed_bytes = fh.read()
         compressed_size = len(compressed_bytes)
 
-        response = make_response(send_file(io.BytesIO(compressed_bytes),
-                                           mimetype="application/pdf",
-                                           download_name=f"compressed_{filename}",
-                                           as_attachment=True))
-        response.headers["X-Original-Size"] = str(orig_bytes)  # Send as bytes
-        response.headers["X-Compressed-Size"] = str(compressed_size)  # Send as bytes
-        response.headers["X-Compression-Ratio"] = f"{(compressed_size / orig_bytes * 100):.1f}%"  # Format as percentage
-        response.headers["X-Quality-Used"] = quality
-        response.headers["X-Target-Size"] = str(target_size_mb if target_size_mb else "")
+        response_data = {
+            "metadata": {
+                "originalSize": orig_bytes,
+                "compressedSize": compressed_size,
+                "compressionRatio": f"{(compressed_size / orig_bytes * 100):.1f}%",
+                "qualityUsed": quality,
+                "targetSizeUsed": target_size_mb
+            },
+            "filename": f"compressed_{filename}"
+        }
+
+        response = make_response(send_file(
+            io.BytesIO(compressed_bytes),
+            mimetype="application/pdf",
+            download_name=f"compressed_{filename}",
+            as_attachment=True
+        ))
+        
+        import base64
+        metadata_json = json.dumps(response_data["metadata"])
+        response.headers["X-Compression-Metadata"] = base64.b64encode(metadata_json.encode()).decode()
 
         return response
 
