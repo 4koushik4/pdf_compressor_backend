@@ -4,6 +4,7 @@ import tempfile
 import shutil
 import subprocess
 import json
+import base64
 from flask import Flask, request, send_file, jsonify, make_response
 from werkzeug.utils import secure_filename
 from flask_cors import CORS
@@ -129,8 +130,9 @@ def compress_endpoint():
                 compressed_bytes = fh.read()
             compressed_size = len(compressed_bytes)
 
-            # Create a combined response with JSON metadata and PDF file
-            response_data = {
+            # Return JSON with file data and metadata
+            return jsonify({
+                "success": True,
                 "metadata": {
                     "originalSize": orig_bytes,
                     "compressedSize": compressed_size,
@@ -138,23 +140,9 @@ def compress_endpoint():
                     "qualityUsed": quality,
                     "targetSizeUsed": target_size_mb
                 },
+                "fileData": base64.b64encode(compressed_bytes).decode('utf-8'),
                 "filename": f"compressed_{filename}"
-            }
-            
-            # Send both the file and metadata
-            response = make_response(send_file(
-                io.BytesIO(compressed_bytes),
-                mimetype="application/pdf",
-                download_name=f"compressed_{filename}",
-                as_attachment=True
-            ))
-            
-            # Add metadata as a header (base64 encoded to avoid issues)
-            import base64
-            metadata_json = json.dumps(response_data["metadata"])
-            response.headers["X-Compression-Metadata"] = base64.b64encode(metadata_json.encode()).decode()
-            
-            return response
+            })
 
         # Iterative compression (target size)
         low = MIN_DPI
@@ -200,7 +188,8 @@ def compress_endpoint():
             compressed_bytes = fh.read()
         compressed_size = len(compressed_bytes)
 
-        response_data = {
+        return jsonify({
+            "success": True,
             "metadata": {
                 "originalSize": orig_bytes,
                 "compressedSize": compressed_size,
@@ -208,21 +197,9 @@ def compress_endpoint():
                 "qualityUsed": quality,
                 "targetSizeUsed": target_size_mb
             },
+            "fileData": base64.b64encode(compressed_bytes).decode('utf-8'),
             "filename": f"compressed_{filename}"
-        }
-
-        response = make_response(send_file(
-            io.BytesIO(compressed_bytes),
-            mimetype="application/pdf",
-            download_name=f"compressed_{filename}",
-            as_attachment=True
-        ))
-        
-        import base64
-        metadata_json = json.dumps(response_data["metadata"])
-        response.headers["X-Compression-Metadata"] = base64.b64encode(metadata_json.encode()).decode()
-
-        return response
+        })
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)
