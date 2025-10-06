@@ -3,11 +3,10 @@ import io
 import tempfile
 import shutil
 import subprocess
-from flask import Flask, request, send_file, jsonify
+from flask import Flask, request, send_file, jsonify, make_response
 from werkzeug.utils import secure_filename
 from flask_cors import CORS
 
-# Flask app
 app = Flask(__name__)
 CORS(app, origins=["https://zenpdf.vercel.app"], supports_credentials=True)
 
@@ -16,13 +15,13 @@ CORS(app, origins=["https://zenpdf.vercel.app"], supports_credentials=True)
 def health():
     return "OK", 200
 
-# Configuration
+# Config
 MAX_UPLOAD_MB = 200
 ALLOWED_EXTENSIONS = {'pdf'}
 GS_BINARY_CANDIDATES = ['gs', 'gswin64c', 'gswin32c']
 MAX_ITERATIONS = 8
 MIN_DPI = 72
-DEFAULT_TIMEOUT = 60  # seconds
+DEFAULT_TIMEOUT = 60
 
 def find_gs():
     for name in GS_BINARY_CANDIDATES:
@@ -109,7 +108,6 @@ def compress_endpoint():
     }
     start_dpi = quality_map[quality]['dpi']
     pdfsettings = quality_map[quality]['pdfsettings']
-
     filename = secure_filename(file.filename)
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -118,7 +116,7 @@ def compress_endpoint():
         with open(in_path, "wb") as f:
             f.write(file.stream.read())
 
-        # Single pass if no target or target >= original
+        # Single pass compression
         if target_size_mb is None or target_size_mb >= mb:
             out_path = os.path.join(tmpdir, f"compressed_{filename}")
             try:
@@ -130,14 +128,11 @@ def compress_endpoint():
                 compressed_bytes = fh.read()
             compressed_size = len(compressed_bytes)
 
-            response = send_file(
-                io.BytesIO(compressed_bytes),
-                mimetype="application/pdf",
-                download_name=f"compressed_{filename}",
-                as_attachment=True
-            )
-
-            # Set custom headers (Flask 3.x compatible)
+            # Create response manually and set headers
+            response = make_response(send_file(io.BytesIO(compressed_bytes),
+                                               mimetype="application/pdf",
+                                               download_name=f"compressed_{filename}",
+                                               as_attachment=True))
             response.headers["X-Original-Size"] = str(orig_bytes)
             response.headers["X-Compressed-Size"] = str(compressed_size)
             response.headers["X-Compression-Ratio"] = f"{compressed_size / orig_bytes:.4f}"
@@ -147,7 +142,7 @@ def compress_endpoint():
 
             return response
 
-        # Iterative compression for target size
+        # Iterative compression (target size)
         low = MIN_DPI
         high = start_dpi
         best_candidate = None
@@ -191,21 +186,17 @@ def compress_endpoint():
             compressed_bytes = fh.read()
         compressed_size = len(compressed_bytes)
 
-        response = send_file(
-            io.BytesIO(compressed_bytes),
-            mimetype="application/pdf",
-            download_name=f"compressed_{filename}",
-            as_attachment=True
-        )
-
+        response = make_response(send_file(io.BytesIO(compressed_bytes),
+                                           mimetype="application/pdf",
+                                           download_name=f"compressed_{filename}",
+                                           as_attachment=True))
         response.headers["X-Original-Size"] = str(orig_bytes)
         response.headers["X-Compressed-Size"] = str(compressed_size)
         response.headers["X-Compression-Ratio"] = f"{compressed_size / orig_bytes:.4f}"
         response.headers["X-Quality-Used"] = quality
-        response.headers["X-Target-Size"] = str(target_size_mb) if target_size_mb else ""
+        response.headers["X-Target-Size"] = str(target_size_mb if target_size_mb else "")
 
         return response
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)
