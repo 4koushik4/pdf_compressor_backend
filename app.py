@@ -9,7 +9,7 @@ from flask_cors import CORS  # <-- import CORS
 
 # Flask app
 app = Flask(__name__)
-CORS(app, origins=["https://zenpdf.vercel.app"], supports_credentials=True)  # <-- enable CORS for all origins; later restrict to frontend if needed
+CORS(app, origins=["https://zenpdf.vercel.app"], supports_credentials=True)  # enable CORS for frontend
 
 # Health check
 @app.route("/health")
@@ -35,7 +35,7 @@ def find_gs():
 GS_BIN = None
 try:
     GS_BIN = find_gs()
-except Exception as e:
+except Exception:
     GS_BIN = None
 
 def allowed_file(filename):
@@ -143,13 +143,15 @@ def compress_endpoint():
             if target_size_mb:
                 headers["X-Target-Size"] = str(target_size_mb)
 
-            return send_file(
+            response = send_file(
                 io.BytesIO(compressed_bytes),
                 mimetype="application/pdf",
                 download_name=f"compressed_{filename}",
-                as_attachment=True,
-                headers=headers
+                as_attachment=True
             )
+            for k, v in headers.items():
+                response.headers[k] = v
+            return response
 
         # Iterative compression to meet target size
         low = MIN_DPI
@@ -203,13 +205,15 @@ def compress_endpoint():
             "X-Target-Size": str(target_size_mb)
         }
 
-        return send_file(
+        response = send_file(
             io.BytesIO(compressed_bytes),
             mimetype="application/pdf",
             download_name=f"compressed_{filename}",
-            as_attachment=True,
-            headers=headers
+            as_attachment=True
         )
+        for k, v in headers.items():
+            response.headers[k] = v
+        return response
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)
