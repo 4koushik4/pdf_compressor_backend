@@ -5,11 +5,11 @@ import shutil
 import subprocess
 from flask import Flask, request, send_file, jsonify
 from werkzeug.utils import secure_filename
-from flask_cors import CORS  # <-- import CORS
+from flask_cors import CORS
 
 # Flask app
 app = Flask(__name__)
-CORS(app, origins=["https://zenpdf.vercel.app"], supports_credentials=True)  # enable CORS for frontend
+CORS(app, origins=["https://zenpdf.vercel.app"], supports_credentials=True)
 
 # Health check
 @app.route("/health")
@@ -25,7 +25,6 @@ MIN_DPI = 72
 DEFAULT_TIMEOUT = 60  # seconds
 
 def find_gs():
-    """Find Ghostscript binary."""
     for name in GS_BINARY_CANDIDATES:
         path = shutil.which(name)
         if path:
@@ -48,7 +47,6 @@ def file_size_mb(file_stream):
     return size / (1024 * 1024), size
 
 def compress_with_gs(input_path, output_path, dpi, pdfsettings='/printer', timeout=DEFAULT_TIMEOUT):
-    """Run Ghostscript compression."""
     args = [
         GS_BIN,
         "-dNOPAUSE",
@@ -104,7 +102,6 @@ def compress_endpoint():
     except:
         return jsonify({"error": "Invalid targetSizeMB"}), 400
 
-    # Quality map
     quality_map = {
         'high': {'dpi': 300, 'pdfsettings': '/prepress'},
         'medium': {'dpi': 200, 'pdfsettings': '/printer'},
@@ -115,7 +112,6 @@ def compress_endpoint():
 
     filename = secure_filename(file.filename)
 
-    # Temporary directory
     with tempfile.TemporaryDirectory() as tmpdir:
         in_path = os.path.join(tmpdir, filename)
         file.stream.seek(0)
@@ -134,26 +130,24 @@ def compress_endpoint():
                 compressed_bytes = fh.read()
             compressed_size = len(compressed_bytes)
 
-            headers = {
-                "X-Original-Size": str(orig_bytes),
-                "X-Compressed-Size": str(compressed_size),
-                "X-Compression-Ratio": f"{compressed_size / orig_bytes:.4f}",
-                "X-Quality-Used": quality
-            }
-            if target_size_mb:
-                headers["X-Target-Size"] = str(target_size_mb)
-
             response = send_file(
                 io.BytesIO(compressed_bytes),
                 mimetype="application/pdf",
                 download_name=f"compressed_{filename}",
                 as_attachment=True
             )
-            for k, v in headers.items():
-                response.headers[k] = v
+
+            # Set custom headers (Flask 3.x compatible)
+            response.headers["X-Original-Size"] = str(orig_bytes)
+            response.headers["X-Compressed-Size"] = str(compressed_size)
+            response.headers["X-Compression-Ratio"] = f"{compressed_size / orig_bytes:.4f}"
+            response.headers["X-Quality-Used"] = quality
+            if target_size_mb:
+                response.headers["X-Target-Size"] = str(target_size_mb)
+
             return response
 
-        # Iterative compression to meet target size
+        # Iterative compression for target size
         low = MIN_DPI
         high = start_dpi
         best_candidate = None
@@ -197,23 +191,21 @@ def compress_endpoint():
             compressed_bytes = fh.read()
         compressed_size = len(compressed_bytes)
 
-        headers = {
-            "X-Original-Size": str(orig_bytes),
-            "X-Compressed-Size": str(compressed_size),
-            "X-Compression-Ratio": f"{compressed_size / orig_bytes:.4f}",
-            "X-Quality-Used": quality,
-            "X-Target-Size": str(target_size_mb)
-        }
-
         response = send_file(
             io.BytesIO(compressed_bytes),
             mimetype="application/pdf",
             download_name=f"compressed_{filename}",
             as_attachment=True
         )
-        for k, v in headers.items():
-            response.headers[k] = v
+
+        response.headers["X-Original-Size"] = str(orig_bytes)
+        response.headers["X-Compressed-Size"] = str(compressed_size)
+        response.headers["X-Compression-Ratio"] = f"{compressed_size / orig_bytes:.4f}"
+        response.headers["X-Quality-Used"] = quality
+        response.headers["X-Target-Size"] = str(target_size_mb) if target_size_mb else ""
+
         return response
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)
