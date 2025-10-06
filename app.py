@@ -133,9 +133,9 @@ def compress_endpoint():
                                                mimetype="application/pdf",
                                                download_name=f"compressed_{filename}",
                                                as_attachment=True))
-            response.headers["X-Original-Size"] = str(orig_bytes)
-            response.headers["X-Compressed-Size"] = str(compressed_size)
-            response.headers["X-Compression-Ratio"] = f"{compressed_size / orig_bytes:.4f}"
+            response.headers["X-Original-Size"] = str(orig_bytes)  # Send as bytes
+            response.headers["X-Compressed-Size"] = str(compressed_size)  # Send as bytes
+            response.headers["X-Compression-Ratio"] = f"{(compressed_size / orig_bytes * 100):.1f}%"  # Format as percentage
             response.headers["X-Quality-Used"] = quality
             if target_size_mb:
                 response.headers["X-Target-Size"] = str(target_size_mb)
@@ -190,9 +190,9 @@ def compress_endpoint():
                                            mimetype="application/pdf",
                                            download_name=f"compressed_{filename}",
                                            as_attachment=True))
-        response.headers["X-Original-Size"] = str(orig_bytes)
-        response.headers["X-Compressed-Size"] = str(compressed_size)
-        response.headers["X-Compression-Ratio"] = f"{compressed_size / orig_bytes:.4f}"
+        response.headers["X-Original-Size"] = str(orig_bytes)  # Send as bytes
+        response.headers["X-Compressed-Size"] = str(compressed_size)  # Send as bytes
+        response.headers["X-Compression-Ratio"] = f"{(compressed_size / orig_bytes * 100):.1f}%"  # Format as percentage
         response.headers["X-Quality-Used"] = quality
         response.headers["X-Target-Size"] = str(target_size_mb if target_size_mb else "")
 
